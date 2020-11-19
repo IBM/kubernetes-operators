@@ -2,7 +2,9 @@
 title: Operator SDK - Type Go
 ---
 
-## Operators 
+## About Operators
+
+See [https://kubernetes.io/docs/concepts/extend-kubernetes/operator/](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/).
 
 Operators are clients of the Kubernetes API that act as controllers for a Custom Resource. Operators are extensions to Kubernetes that use custom resources to manage applications and their components. They follow the Kubernetes principle of the control loop.
 

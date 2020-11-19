@@ -1,12 +1,8 @@
 ---
-title: Operators
+title: Operator Tools
 ---
 
-## About Operators
-
-https://kubernetes.io/docs/concepts/extend-kubernetes/operator/
-
-
+## Operator Tools
 
 To write applications that use the Kubernetes REST API, you can use one of the following supported client libraries:
 - [Go](https://github.com/kubernetes/client-go/),
