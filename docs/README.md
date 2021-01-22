@@ -19,7 +19,7 @@ Kubernetes Operators is a series of labs about deploying applications to Kuberne
 ## Technologies
 
 * Red Hat OpenShift Kubernetes Service (ROKS) v4.5
-* Operator Framework, 
+* Operator Framework
 
 ## Contributors
 

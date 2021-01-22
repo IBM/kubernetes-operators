@@ -24,26 +24,26 @@ For detailed installation instructions go [here](https://sdk.operatorframework.i
 
 To install the Operator SDK in Ubuntu, you need to install the Go tools and the Operator SDK.
 
-```
-$ curl -LO https://golang.org/dl/go1.14.4.linux-amd64.tar.gz 
-$ tar -C /usr/local -xzf go1.14.4.linux-amd64.tar.gz 
-$ export PATH=$PATH:/usr/local/go/bin
+```bash
+curl -LO https://golang.org/dl/go1.14.4.linux-amd64.tar.gz
+tar -C /usr/local -xzf go1.14.4.linux-amd64.tar.gz
+export PATH=$PATH:/usr/local/go/bin
 
-$ curl -LO https://github.com/operator-framework/operator-sdk/releases/download/v0.18.2/operator-sdk-v0.18.2-x86_64-linux-gnu 
-$ chmod +x operator-sdk-v0.18.2-x86_64-linux-gnu 
-$ sudo mkdir -p /usr/local/bin/ 
-$ sudo cp operator-sdk-v0.18.2-x86_64-linux-gnu /usr/local/bin/operator-sdk 
-$ rm operator-sdk-v0.18.2-x86_64-linux-gnu
+curl -LO https://github.com/operator-framework/operator-sdk/releases/download/v0.18.2/operator-sdk-v0.18.2-x86_64-linux-gnu
+chmod +x operator-sdk-v0.18.2-x86_64-linux-gnu
+sudo mkdir -p /usr/local/bin/
+sudo cp operator-sdk-v0.18.2-x86_64-linux-gnu /usr/local/bin/operator-sdk
+rm operator-sdk-v0.18.2-x86_64-linux-gnu
 
-$ go version
-$ operator-sdk version
+go version
+operator-sdk version
 ```
 
 ## 1. Create a New Project
 
 Create a [new Operator](https://docs.openshift.com/container-platform/4.3/operators/operator_sdk/osdk-cli-reference.html#osdk-cli-reference-new_osdk-cli-reference) project,
 
-```
+```bash
 export DOCKER_USERNAME=<your-docker-username>
 
 export OPERATOR_NAME=guestbook-operator
@@ -68,8 +68,8 @@ The scaffolding of a new project will create an operator, an api and a controlle
 
 Add a new API definition for a new Custom Resource under `pkg/apis` and generate the Custom Resource Definition (CRD) and Custom Resource (CR) files under `deploy/crds`.
 
-```
-$ operator-sdk add api --api-version=$OPERATOR_GROUP/$OPERATOR_VERSION --kind=$CRD_KIND
+```bash
+operator-sdk add api --api-version=$OPERATOR_GROUP/$OPERATOR_VERSION --kind=$CRD_KIND
 ```
 
 The command will create a new API, a Custom Resource (CR), a Custom Resource Definition (CRD).
@@ -77,6 +77,7 @@ The command will create a new API, a Custom Resource (CR), a Custom Resource Def
 ![new project directory structure](images/lab1/new-api-dir-structure.png)
 
 One file is created in `pkg/apis` called `addtoscheme_guestbook_v1.go` that registers the new schema. One new file is created in `pkg/apis/guestbook` called `group.go` that defines the package. Four new files are created in `pkg/apis/guestbook/v1`:
+
 - doc.go,
 - guestbook_types.go,
 - register.go,
@@ -84,11 +85,11 @@ One file is created in `pkg/apis` called `addtoscheme_guestbook_v1.go` that regi
 
 The `guestbook_types.go` file,
 
-```
+```go
 package v1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+ metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // GuestbookSpec defines the desired state of Guestbook
@@ -100,27 +101,28 @@ type GuestbookStatus struct {
 }
 
 type Guestbook struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+ metav1.TypeMeta   `json:",inline"`
+ metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   GuestbookSpec   `json:"spec,omitempty"`
-	Status GuestbookStatus `json:"status,omitempty"`
+ Spec   GuestbookSpec   `json:"spec,omitempty"`
+ Status GuestbookStatus `json:"status,omitempty"`
 }
 
 // GuestbookList contains a list of Guestbook
 type GuestbookList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Guestbook `json:"items"`
+ metav1.TypeMeta `json:",inline"`
+ metav1.ListMeta `json:"metadata,omitempty"`
+ Items           []Guestbook `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Guestbook{}, &GuestbookList{})
+ SchemeBuilder.Register(&Guestbook{}, &GuestbookList{})
 }
 ```
 
 The Custom Resource (CR) in file `deploy/crds/guestbook.remkoh.dev_v1_guestbook_cr`,
-```
+
+```yaml
 apiVersion: guestbook.remkoh.dev/v1
 kind: Guestbook
 metadata:
@@ -131,7 +133,8 @@ spec:
 ```
 
 The Custom Resource Definition (CRD) in file `deploy/crds/guestbook.remkoh.dev_guestbooks_crd.yaml`,
-```
+
+```yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -177,28 +180,29 @@ spec:
 
 ## 3. Create a new Controller
 
-Add a new controller under `pkg/controller/<kind>`. 
+Add a new controller under `pkg/controller/<kind>`.
 
-```
-$ operator-sdk add controller --api-version=$OPERATOR_GROUP/$OPERATOR_VERSION --kind=$CRD_KIND
+```bash
+operator-sdk add controller --api-version=$OPERATOR_GROUP/$OPERATOR_VERSION --kind=$CRD_KIND
 ```
 
 This command creates two files in `pkg/controller`:
+
 - `add_guestbook.go`, which registers the new controller, and
 - `guestbook/guestbook_controller.go`, which is the actual custom controller logic.
 
 The file `guestbook/guestbook_controller.go` defines the `Reconcile` function,
 
-```
+```go
 // Reconcile reads state of the cluster for a Guestbook object and makes changes based on the state read and what is in the Guestbook.Spec
 // TODO(user): User must modify this Reconcile function to implement their own Controller logic.  This example creates a Pod as an example
 func (r *ReconcileGuestbook) Reconcile(request reconcile.Request) (reconcile.Result, error) {
     ...
     // Fetch the Guestbook instance
-	instance := &guestbookv1.Guestbook{}
+ instance := &guestbookv1.Guestbook{}
     ...
     // Define a new Pod object
-	pod := newPodForCR(instance)
+ pod := newPodForCR(instance)
     ...
 }
 ```
@@ -207,54 +211,54 @@ func (r *ReconcileGuestbook) Reconcile(request reconcile.Request) (reconcile.Res
 
 The operator-sdk build command compiles the code and builds the executables. fter you built the image, push it to your image registry, e.g. Docker hub.
 
-```
-$ operator-sdk build docker.io/$DOCKER_USERNAME/$OPERATOR_NAME
-$ docker login docker.io -u $DOCKER_USERNAME
-$ docker push docker.io/$DOCKER_USERNAME/$OPERATOR_NAME
+```bash
+operator-sdk build docker.io/$DOCKER_USERNAME/$OPERATOR_NAME
+docker login docker.io -u $DOCKER_USERNAME
+docker push docker.io/$DOCKER_USERNAME/$OPERATOR_NAME
 ```
 
 ## 5. Deploy the Operator
 
 First replace the image attribute in the operator resource with the built image,
 
-```
-$ sed -i "s|REPLACE_IMAGE|docker.io/$DOCKER_USERNAME/$OPERATOR_NAME|g" deploy/operator.yaml
+```bash
+sed -i "s|REPLACE_IMAGE|docker.io/$DOCKER_USERNAME/$OPERATOR_NAME|g" deploy/operator.yaml
 ```
 
 Make sure you are connected to the OpenShift cluster (see above how to connect), and deploy the operator with the following template code.
 
-```
-$ oc create sa $OPERATOR_PROJECT
-$ oc create -f deploy/role.yaml
-$ oc create -f deploy/role_binding.yaml
-$ oc create -f deploy/crds/${OPERATOR_GROUP}_${CRD_KIND,,}s_crd.yaml
-$ oc create -f deploy/operator.yaml
-$ oc create -f deploy/crds/${OPERATOR_GROUP}_${OPERATOR_VERSION}_${CRD_KIND,,}_cr.yaml
-$ oc get deployment $OPERATOR_PROJECT
-$ oc get pod -l app=example-${CRD_KIND,,}
-$ oc describe ${CRD_KIND,,}s.${OPERATOR_GROUP} example-${CRD_KIND,,}
+```bash
+oc create sa $OPERATOR_PROJECT
+oc create -f deploy/role.yaml
+oc create -f deploy/role_binding.yaml
+oc create -f deploy/crds/${OPERATOR_GROUP}_${CRD_KIND,,}s_crd.yaml
+oc create -f deploy/operator.yaml
+oc create -f deploy/crds/${OPERATOR_GROUP}_${OPERATOR_VERSION}_${CRD_KIND,,}_cr.yaml
+oc get deployment $OPERATOR_PROJECT
+oc get pod -l app=example-${CRD_KIND,,}
+oc describe ${CRD_KIND,,}s.${OPERATOR_GROUP} example-${CRD_KIND,,}
 ```
 
 For our example Guestbook project the above templates should resolve as follows,
 
-```
-$ oc create sa guestbook-project
-$ oc create -f deploy/role.yaml
-$ oc create -f deploy/role_binding.yaml
-$ oc create -f deploy/crds/guestbook.remkoh.dev_guestbooks_crd.yaml
-$ oc create -f deploy/operator.yaml
-$ oc create -f deploy/crds/guestbook.remkoh.dev_v1_guestbook_cr.yaml
-$ oc get deployment guestbook-project
-$ oc get pod -l app=example-guestbook
-$ oc describe guestbooks.guestbook.remkoh.dev example-guestbook
+```bash
+oc create sa guestbook-project
+oc create -f deploy/role.yaml
+oc create -f deploy/role_binding.yaml
+oc create -f deploy/crds/guestbook.remkoh.dev_guestbooks_crd.yaml
+oc create -f deploy/operator.yaml
+oc create -f deploy/crds/guestbook.remkoh.dev_v1_guestbook_cr.yaml
+oc get deployment guestbook-project
+oc get pod -l app=example-guestbook
+oc describe guestbooks.guestbook.remkoh.dev example-guestbook
 ```
 
 ## Cleanup
 
-```
-$ oc delete sa $OPERATOR_PROJECT
-$ oc delete role $OPERATOR_PROJECT
-$ oc delete rolebinding $OPERATOR_PROJECT
-$ oc delete customresourcedefinition ${CRD_KIND,,}s.${OPERATOR_GROUP}
-$ oc delete deployment $OPERATOR_PROJECT
+```bash
+oc delete sa $OPERATOR_PROJECT
+oc delete role $OPERATOR_PROJECT
+oc delete rolebinding $OPERATOR_PROJECT
+oc delete customresourcedefinition ${CRD_KIND,,}s.${OPERATOR_GROUP}
+oc delete deployment $OPERATOR_PROJECT
 ```
