@@ -19,8 +19,10 @@ Information of creating a new operator can be found [here](https://docs.openshif
 
 The lab requires you to have the `operator-sdk` installed. Login into the client CLI following these [instructions](https://ibm-developer.gitbook.io/openshift-bootcamp/v/workshop-openshift101/setup/cognitiveclass). Run the command shown below to install the prerequisites:
 
+
 ```bash
-source <(curl -s https://raw.githubusercontent.com/rojanjose/guestbook-helm-operator/master/scripts/operatorInstall.sh)
+source <(curl -s https://raw.githubusercontent.com/rojanjose/kubernetes-operators/master/src/scripts/operatorInstall.sh)
+export PATH="${HOME}/bin:${PATH}"
 ```
 
 Check the command output to ensure the SDK version is correct.

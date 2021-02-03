@@ -15,16 +15,20 @@ curl -LO ${OPERATOR_SDK_URL}/${RELEASE_VERSION}/operator-sdk_${FLAVOR}
 echo -e "\noperaror-sdk-$RELEASE_VERSION-$FLAVOR downloaded.\n"
 ls -al operator-sdk_${FLAVOR}
 echo -e "\nInstalling operaror-sdk-$RELEASE_VERSION-$FLAVOR\n"
+
+#Install operator SDK in the user/local/bin
 #chmod +x operator-sdk_${FLAVOR} && sudo mv operator-sdk_${FLAVOR} /usr/local/bin/operator-sdk
 
-chmod +x operator-sdk_${FLAVOR} && mkdir -p ./bin && mv operator-sdk_${FLAVOR} ./bin/operator-sdk
+#Install operator SDK in the user's home directory
+chmod +x operator-sdk_${FLAVOR} && mkdir -p ${HOME}/bin && mv operator-sdk_${FLAVOR} ${HOME}/bin/operator-sdk
 
 echo -e "Checking prereqs version ...\nGo version:"
 go version
 echo -e "-----------------------------\nHelm version:"
 helm version
 echo -e "-----------------------------\nOperator-sdk version:"
-./bin/operator-sdk version
+${HOME}/bin/operator-sdk version
+
 #echo -e "-----------------------------\nAnsible operator version:"
 #ansible-operator version
 #echo -e "-----------------------------\nHelm operator Version:"
