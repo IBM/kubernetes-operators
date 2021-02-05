@@ -81,8 +81,13 @@ cd ${OPERATOR_PROJECT}
 ```
 
 Use the operator SDK to initialize the project. Specify the plugin and API group as the parameters for this command.
-```
+
+```bash
 operator-sdk init --plugins=helm --domain guestbook.ibm.com
+
+```
+```
+$ operator-sdk init --plugins=helm --domain guestbook.ibm.com
 Next: define a resource with:
 
 $ operator-sdk create api
@@ -125,7 +130,7 @@ Use the command `tree .` to view the complete directory structure as shown in th
 ├── helm-charts
 └── watches.yaml
 ```
-Operator SDK uses the kubernetes [Kustomize](https://github.com/kubernetes-sigs/kustomize) tool for managing the deployment of yaml files, hence `kustomization.yaml` in all the directories. `config/default` and `confg/manager` contains the specification to inject the controller manager container into the operator pod as a side car. The `confg/rbac` folder contains a set of default access control rules. Review the `Makefile` to understand the `operator-sdk`, `kustomize` and `docker` commands executed for various tasks.
+Operator SDK uses the kubernetes [Kustomize](https://github.com/kubernetes-sigs/kustomize) tool for managing the deployment of yaml files, hence you see the `kustomization.yaml` in all the directories. `config/default` and `confg/manager` contains the specification to inject the controller manager container into the operator pod as a side car. The `confg/rbac` folder contains a set of default access control rules. Review the `Makefile` to understand the `operator-sdk`, `kustomize` and `docker` commands executed for various tasks.
 
 Next step, create the API artifacts. Provide the name and the location of the helm chart as input parameters to this command. This command will create the `crd` folder with the custom resource definition for the Guestbook operator. The command picks the latest version of the helm chart, if the helm version parameter is ignored.
 ```
@@ -421,6 +426,29 @@ guestbook.charts.guestbook.ibm.com "guestbook-sample" deleted
 
 $ oc get all -n guestbook
 No resources found in guestbook namespace.
+
+$ oc delete project guestbook
+project.project.openshift.io "guestbook" deleted
+```
+
+Finally, to delete the CRDs, run the `make undeploy` command:
+```
+make undeploy
+```
+```
+$ make undeploy
+/home/student/guestbook-operator-project/bin/kustomize build config/default | kubectl delete -f -
+namespace "gb-helm-operator-system" deleted
+customresourcedefinition.apiextensions.k8s.io "guestbooks.charts.guestbook.ibm.com" deleted
+role.rbac.authorization.k8s.io "gb-helm-operator-leader-election-role" deleted
+clusterrole.rbac.authorization.k8s.io "gb-helm-operator-manager-role" deleted
+clusterrole.rbac.authorization.k8s.io "gb-helm-operator-metrics-reader" deleted
+clusterrole.rbac.authorization.k8s.io "gb-helm-operator-proxy-role" deleted
+rolebinding.rbac.authorization.k8s.io "gb-helm-operator-leader-election-rolebinding" deleted
+clusterrolebinding.rbac.authorization.k8s.io "gb-helm-operator-manager-rolebinding" deleted
+clusterrolebinding.rbac.authorization.k8s.io "gb-helm-operator-proxy-rolebinding" deleted
+service "gb-helm-operator-controller-manager-metrics-service" deleted
+deployment.apps "gb-helm-operator-controller-manager" deleted
 ```
 
 This concludes the Helm Operator lab. Go [here](https://v1-3-x.sdk.operatorframework.io/docs/building-operators/helm/quickstart/) for additional information on building operators using Helm.
