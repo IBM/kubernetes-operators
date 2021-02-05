@@ -14,6 +14,8 @@ Kubernetes Operators is a series of labs about deploying applications to Kuberne
 2. Create a Custom Resource (CR),
 3. Create an Operator of Type Go using the Operator SDK,
 4. Create an Operator using an Existing Helm Chart,
+5. OLM introduction,
+6. Operators with OLM
 
 ## Technologies
 
