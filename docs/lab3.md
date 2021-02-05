@@ -132,6 +132,8 @@ Use the command `tree .` to view the complete directory structure as shown in th
 ```
 Operator SDK uses the kubernetes [Kustomize](https://github.com/kubernetes-sigs/kustomize) tool for managing the deployment of yaml files, hence you see the `kustomization.yaml` in all the directories. `config/default` and `confg/manager` contains the specification to inject the controller manager container into the operator pod as a side car. The `confg/rbac` folder contains a set of default access control rules. Review the `Makefile` to understand the `operator-sdk`, `kustomize` and `docker` commands executed for various tasks.
 
+### 2. Create the API to generate the CRD files for the chart. 
+
 Next step, create the API artifacts. Provide the name and the location of the helm chart as input parameters to this command. This command will create the `crd` folder with the custom resource definition for the Guestbook operator. The command picks the latest version of the helm chart, if the helm version parameter is ignored.
 ```
 operator-sdk create api --helm-chart=guestbook --helm-chart-repo=https://raw.githubusercontent.com/IBM/helm101/master/ 
@@ -227,7 +229,7 @@ spec:
  ...     
 ```
 
-### 2. Build the Operator container image and push it to registry.
+### 3. Build the Operator container image and push it to registry.
 
 Login into the docker registry using your personal id and password.
 ```bash
@@ -278,7 +280,7 @@ rojanjose/guestbook-operator               v1.0.0              590c0196c2b6     
 quay.io/operator-framework/helm-operator   v1.3.0              57683a970d10        6 weeks ago         160MB
 ```
 
-### 3. Apply the CRD in the cluster and deploy the operator image.
+### 4. Apply the CRD in the cluster and deploy the operator image.
 
 Install the Guestbook customer resource definition using the `make install` command:
 ```
@@ -335,7 +337,7 @@ replicaset.apps/guestbook-operator-project-controller-manager-7bc6f986dd   1    
 ```
 
 
-### 4. Deploy the operand by applying the custom resource (CR) into the cluster.
+### 5. Deploy the operand by applying the custom resource (CR) into the cluster.
 
 Create a new project called `guestbook` where Guestbook application will be deployed.
 ```bash
@@ -413,7 +415,7 @@ Guestbook operator pod:
 Guestbook application pods:
 ![Operator pd](images/lab3/application-pod.png)
 
-### 5. Cleanup the deployment.
+### 6. Cleanup the deployment.
 
 Remove the Guestbook application by deleting the customer resource (CR).
 
