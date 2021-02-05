@@ -1,415 +1,454 @@
 # Create an Operator using an Existing Helm Chart
 
-The Operator Framework is an open source project that provides developer and runtime Kubernetes tools, enabling you to accelerate the development of an Operator. The Operator SDK provides the tools to build, test and package Operators.
+The [Operator Framework](https://operatorframework.io/) is an open source project that provides developer and runtime Kubernetes tools, enabling you to accelerate the development of an Operator. The Operator SDK provides the tools to build, test and package Operators.
 
-The following workflow is for a Helm operator using existing chart :
+The following workflow is to build an operator using an existing Helm chart :
 
-1. Create a new operator project using the SDK Command Line Interface(CLI)
-2. Create a new (or add your existing) Helm chart for use by the operator’s reconciling logic
-3. Use the SDK CLI to build and generate the operator deployment manifests
-4. Optionally add additional CRD’s using the SDK CLI and repeat steps 2 and 3
-5. Use the SDK bundle feature to package the operator for OLM deployment.
-6. Deploy, test and publish.
+1. Create a new operator project and initialize it using the SDK Command Line Interface(CLI)
+2. Create the API to generate the CRD files for the chart. 
+3. Build the Operator container image and push it to a registry.
+4. Apply the CRD in the cluster and deploy the operator image.
+5. Deploy the operand by applying the custom resource (CR) into the cluster.
+6. Cleanup the deployment.
 
-In this lab, we will use the IBM Guestbook helm chart available [here](https://ibm.github.io/helm101) as the base to scaffold a new operator.
+In this lab, we will use the IBM Guestbook helm chart available [here](https://ibm.github.io/helm101) as the base to scaffold a new operator. 
 
-Information of creating a new operator can be found [here](https://docs.openshift.com/container-platform/4.3/operators/operator_sdk/osdk-getting-started.html)
+Information on creating a new operator can be found [here](https://docs.openshift.com/container-platform/4.6/operators/operator_sdk/osdk-getting-started.html)
+Operator SDK made several technology and architecture changes with the release of v1.0 which as listed [here](https://www.openshift.com/blog/operator-sdk-reaches-v1.0). 
 
 ## Setup
 
-The lab requires you to have the `operator-sdk` installed. Login into the client CLI following these [instructions](https://ibm-developer.gitbook.io/openshift-bootcamp/v/workshop-openshift101/setup/cognitiveclass). Run the command shown below to install the prerequisites:
+The following must be done before you can get started on the lab:
 
-```bash
-source <(curl -s https://raw.githubusercontent.com/rojanjose/guestbook-helm-operator/master/scripts/operatorInstall.sh)
-```
+1. Create your lab environment by following the steps found [here](https://ibm.github.io/workshop-setup/OPENLABS/){:target="_blank"}
+    
+2. The lab requires a newer version of the `operator-sdk` installed. In the lab terminal, run the commands shown below to install the prerequisites:
 
-Check the command output to ensure the SDK version is correct.
+    ```bash
+    source <(curl -s https://raw.githubusercontent.com/ibm/kubernetes-operators/master/src/scripts/operatorInstall.sh)
+    export PATH="${HOME}/bin:${PATH}"
+    ```
+    ```log
+    $ source <(curl -s https://raw.githubusercontent.com/ibm/kubernetes-operators/master/src/scripts/operatorInstall.sh)
 
-```bash
-...
-Checking prereqs version ...
-Go version:
-go version go1.14.4 linux/amd64
------------------------------
-Helm version:
-version.BuildInfo{Version:"v3.0.3", GitCommit:"ac925eb7279f4a6955df663a0128044a8a6b7593", GitTreeState:"clean", GoVersion:"go1.13.6"}
------------------------------
-Operator-sdk version:
-operator-sdk version: "v0.19.2", commit: "4282ce9acdef6d7a1e9f90832db4dc5a212ae850", kubernetes version: "v1.18.2", go version: "go1.13.10 linux/amd64"
-```
+    Downloading operaror-sdk-v1.3.0-linux_amd64 ...
 
-Log into your OpenShift [cluster](https://ibm-developer.gitbook.io/openshift-bootcamp/v/workshop-openshift101/setup/grantcluster).
+      % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                    Dload  Upload   Total   Spent    Left  Speed
+    100   632  100   632    0     0   1876      0 --:--:-- --:--:-- --:--:--  1875
+    100 64.8M  100 64.8M    0     0  61.9M      0  0:00:01  0:00:01 --:--:-- 61.9M
 
-```bash
-oc login --token=YQ2-mTJIWlz1gsWeI2tsO4CzHBbRSCQbH-IdA3tEFrM --server=https://c100-e.us-east.containers.cloud.ibm.com:32055
-```
+    operaror-sdk-v1.3.0-linux_amd64 downloaded.
+    ......
+    ```
+    Run a version check after the `operator-sdk` installation is complete:
+    ```
+    operator-sdk version
+    ```
+    ```
+    $ operator-sdk version
+    operator-sdk version: "v1.3.0", commit: "1abf57985b43bf6a59dcd18147b3c574fa57d3f6", kubernetes version: "1.19.4", go version: "go1.15.5", GOOS: "linux", GOARCH: "amd64"
+    ```
 
-### Create the operator
 
-### 1. Create a new project
+3. Log into the OpenShift cluster: Scroll down on the Quick Links and Common commands page until you see a terminal command block with green text and a description above it that says Log in to your OpenShift cluster. Click on the command and it will automatically paste into your terminal and execute.
 
-Export these environment variables prior to starting the project.
+    ![Cluster login](./images/lab3/loginCommand.png)
 
+4. This lab uses docker registry to container image storage. Create a new [docker hub](https://hub.docker.com/) id, if you do not have one.
+
+## Create the operator
+
+### 1. Create a new project & initialize it using SDK
+
+Certain parameters will be used repetitively. Export these parameters as environment variables prior to starting the project.
+
+Replace `<your-docker-username>` with your docker hub id.
 ```bash
 export DOCKER_USERNAME=<your-docker-username>
+```
+Set names for the operator, project and operator version. The operator container images is built using these values.
+```bash
 export OPERATOR_NAME=guestbook-operator
 export OPERATOR_PROJECT=guestbook-operator-project
 export OPERATOR_VERSION=v1.0.0
-
-export IMG=docker.io/${DOCKER_USERNAME}/${OPERATOR_NAME}:${OPERATOR_VERSION}
+export IMAGE=docker.io/${DOCKER_USERNAME}/${OPERATOR_NAME}:${OPERATOR_VERSION}
+```
+Create the project directory for the operator.
+```bash
+mkdir -p ${OPERATOR_PROJECT}
+cd ${OPERATOR_PROJECT}
 ```
 
-Create a new project called guestbook-operator using the existing guestbook helm chart. The guestbook chart is available at the repo `https://ibm.github.io/helm101/`.
+Use the operator SDK to initialize the project. Specify the plugin and API group as the parameters for this command.
 
 ```bash
-operator-sdk new $OPERATOR_PROJECT --type=helm --helm-chart=guestbook --helm-chart-repo=https://ibm.github.io/helm101/
-cd $OPERATOR_PROJECT
+operator-sdk init --plugins=helm --domain guestbook.ibm.com
+
+```
+```
+$ operator-sdk init --plugins=helm --domain guestbook.ibm.com
+Next: define a resource with:
+
+$ operator-sdk create api
 ```
 
-Output:
+The initialization step create a scaffolding with the operator boiler plate code. At high level, this creates the `config` directory, `watches.yaml` and the place holder for the helm chart.
+Use the command `tree .` to view the complete directory structure as shown in the block below:
+```
+.
+├── Dockerfile
+├── Makefile
+├── PROJECT
+├── config
+│   ├── default
+│   │   ├── kustomization.yaml
+│   │   └── manager_auth_proxy_patch.yaml
+│   ├── manager
+│   │   ├── kustomization.yaml
+│   │   └── manager.yaml
+│   ├── prometheus
+│   │   ├── kustomization.yaml
+│   │   └── monitor.yaml
+│   ├── rbac
+│   │   ├── auth_proxy_client_clusterrole.yaml
+│   │   ├── auth_proxy_role.yaml
+│   │   ├── auth_proxy_role_binding.yaml
+│   │   ├── auth_proxy_service.yaml
+│   │   ├── kustomization.yaml
+│   │   ├── leader_election_role.yaml
+│   │   ├── leader_election_role_binding.yaml
+│   │   ├── role.yaml
+│   │   └── role_binding.yaml
+│   └── scorecard
+│       ├── bases
+│       │   └── config.yaml
+│       ├── kustomization.yaml
+│       └── patches
+│           ├── basic.config.yaml
+│           └── olm.config.yaml
+├── helm-charts
+└── watches.yaml
+```
+Operator SDK uses the kubernetes [Kustomize](https://github.com/kubernetes-sigs/kustomize) tool for managing the deployment of yaml files, hence you see the `kustomization.yaml` in all the directories. `config/default` and `confg/manager` contains the specification to inject the controller manager container into the operator pod as a side car. The `confg/rbac` folder contains a set of default access control rules. Review the `Makefile` to understand the `operator-sdk`, `kustomize` and `docker` commands executed for various tasks.
 
-```bash
-INFO[0000] Creating new Helm operator 'guestbook-operator-project'.
-INFO[0000] Created helm-charts/guestbook
-INFO[0000] Generating RBAC rules
-I0813 23:07:00.995286   11211 request.go:621] Throttling request took 1.031369076s, request: GET:https://c100-e.us-east.containers.cloud.ibm.com:31941/apis/scheduling.k8s.io/v1?timeout=32s
-WARN[0002] The RBAC rules generated in deploy/role.yaml are based on the chart's default manifest. Some rules may be missing for resources that are only enabled with custom values, and some existing rules may be overly broad. Double check the rules generated in deploy/role.yaml to ensure they meet the operator's permission requirements.
-INFO[0002] Created build/Dockerfile
-INFO[0002] Created deploy/service_account.yaml
-INFO[0002] Created deploy/role.yaml
-INFO[0002] Created deploy/role_binding.yaml
-INFO[0002] Created deploy/operator.yaml
-INFO[0002] Created deploy/crds/helm.operator-sdk_v1alpha1_guestbook_cr.yaml
-INFO[0002] Generated CustomResourceDefinition manifests.
-INFO[0002] Project creation complete.
+Next step, create the API artifacts. Provide the name and the location of the helm chart as input parameters to this command. This command will create the `crd` folder with the custom resource definition for the Guestbook operator. The command picks the latest version of the helm chart, if the helm version parameter is ignored.
+```
+operator-sdk create api --helm-chart=guestbook --helm-chart-repo=https://raw.githubusercontent.com/IBM/helm101/master/ 
+```
+```
+operator-sdk create api --helm-chart=guestbook --helm-chart-repo=https://raw.githubusercontent.com/IBM/helm101/master/
+Created helm-charts/guestbook
+Generating RBAC rules
+I0202 15:46:05.545032   48799 request.go:645] Throttling request took 1.005544854s, request: GET:https://c107-e.us-south.containers.cloud.ibm.com:30606/apis/extensions/v1beta1?timeout=32s
+WARN[0003] The RBAC rules generated in config/rbac/role.yaml are based on the chart's default manifest. Some rules may be missing for resources that are only enabled with custom values, and some existing rules may be overly broad. Double check the rules generated in config/rbac/role.yaml to ensure they meet the operator's permission requirements.
 ```
 
-![Generated code](images/lab4/guestbook-scafold-code.png)
-
-Review the code and customize the operator logic as required to obtain the desired results. By default, the Guestbook operator installs the configured helm chart watches the events shown in the `watches.yaml`.
-
-```yaml
-- group: helm.operator-sdk
-  version: v1alpha1
-  kind: Guestbook
-  chart: helm-charts/guestbook
+Check the new additions to the scaffolding using the `tree .` command:
+```
+.
+├── Dockerfile
+├── Makefile
+├── PROJECT
+├── config
+│   ├── crd
+│   │   ├── bases
+│   │   │   └── charts.guestbook.ibm.com_guestbooks.yaml
+│   │   └── kustomization.yaml
+│   ├── default
+│   │   ├── kustomization.yaml
+│   │   └── manager_auth_proxy_patch.yaml
+│   ├── manager
+│   │   ├── kustomization.yaml
+│   │   └── manager.yaml
+│   ├── prometheus
+│   │   ├── kustomization.yaml
+│   │   └── monitor.yaml
+│   ├── rbac
+│   │   ├── auth_proxy_client_clusterrole.yaml
+│   │   ├── auth_proxy_role.yaml
+│   │   ├── auth_proxy_role_binding.yaml
+│   │   ├── auth_proxy_service.yaml
+│   │   ├── guestbook_editor_role.yaml
+│   │   ├── guestbook_viewer_role.yaml
+│   │   ├── kustomization.yaml
+│   │   ├── leader_election_role.yaml
+│   │   ├── leader_election_role_binding.yaml
+│   │   ├── role.yaml
+│   │   └── role_binding.yaml
+│   ├── samples
+│   │   └── charts_v1alpha1_guestbook.yaml
+│   └── scorecard
+│       ├── bases
+│       │   └── config.yaml
+│       ├── kustomization.yaml
+│       └── patches
+│           ├── basic.config.yaml
+│           └── olm.config.yaml
+├── helm-charts
+│   └── guestbook
+│       ├── Chart.yaml
+│       ├── LICENSE
+│       ├── README.md
+│       ├── templates
+│       │   ├── NOTES.txt
+│       │   ├── _helpers.tpl
+│       │   ├── guestbook-deployment.yaml
+│       │   ├── guestbook-service.yaml
+│       │   ├── redis-master-deployment.yaml
+│       │   ├── redis-master-service.yaml
+│       │   ├── redis-slave-deployment.yaml
+│       │   └── redis-slave-service.yaml
+│       └── values.yaml
+└── watches.yaml
 ```
 
-The custom resource (CR) file defines the properties used by operator while it creates an instance of the Guestbook application. These properties are derived from the `values.yaml` file in the Helm chart.
-
-```yaml
-apiVersion: helm.operator-sdk/v1alpha1
-kind: Guestbook
+View the contents of the CRD. Note the values for `names` and `schema.openAPIV3Schema.properties`.
+```
+more config/crd/bases/charts.guestbook.ibm.com_guestbooks.yaml
+```
+```
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
 metadata:
-  name: example-guestbook
+  name: guestbooks.charts.guestbook.ibm.com
 spec:
-  # Default values copied from <project_dir>/helm-charts/guestbook/values.yaml
-
-  image:
-    pullPolicy: Always
-    repository: ibmcom/guestbook
-    tag: v1
-  redis:
-    port: 6379
-    slaveEnabled: true
-  replicaCount: 2
-  service:
-    port: 3000
-    type: LoadBalancer
+  group: charts.guestbook.ibm.com
+  names:
+    kind: Guestbook
+    listKind: GuestbookList
+    plural: guestbooks
+    singular: guestbook
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+ ...     
 ```
 
-### 2. Deploy the CRD
+### 2. Build the Operator container image and push it to registry.
 
-Let Kubernetes know about the new custom resource definition (CRD) the operator will be watching.
-
-```bash
-oc create -f deploy/crds/helm.operator-sdk_guestbooks_crd.yaml
-```
-
-Verify the CRD install in OpenShift console:
-
-![CRD Deploy](images/lab4/guestbook-crd.png)
-
-Alternatively, query using the following CLI commands:
-
-```bash
-oc get crd guestbooks.helm.operator-sdk
-oc describe crd guestbooks.helm.operator-sdk
-```
-
-### 3. Build the code
-
-Use the generated Dockerfile under build directory for image build.
-
-```Dockerfile
-FROM quay.io/operator-framework/helm-operator:v0.19.2
-
-COPY watches.yaml ${HOME}/watches.yaml
-COPY helm-charts/ ${HOME}/helm-charts/
-```
-
-Run the operator sdk build command to build the image for the helm operator.
-
-```bash
-operator-sdk build ${IMG}
-```
-
-```bash
-INFO[0000] Building OCI image docker.io/rojanjose/guestbook-operator:v1.0.0
-Sending build context to Docker daemon  41.98kB
-Step 1/3 : FROM quay.io/operator-framework/helm-operator:v0.19.2
-v0.19.2: Pulling from operator-framework/helm-operator
-41ae95b593e0: Pull complete
-f20f68829d13: Pull complete
-05c2e7d4212e: Pull complete
-66213365a0c9: Pull complete
-09e5a7e28c6f: Pull complete
-Digest: sha256:0f1e104719267f687280d8640a6958c61510fae27a6937369c419b0dd2b91564
-....
-```
-
-Verify the built image:
-
-```bash
-$ docker images
-REPOSITORY                                 TAG                 IMAGE ID            CREATED             SIZE
-rojanjose/guestbook-operator               v1.0.0              d05f5e2c441e        7 seconds ago       200MB
-quay.io/operator-framework/helm-operator   v0.19.2             11862329f28c        2 weeks ago         200MB
-```
-
-Log into the docker registry and push image:
-
+Login into the docker registry using your personal id and password.
 ```bash
 docker login docker.io -u $DOCKER_USERNAME
-docker push ${IMG}
+```
+```
+$ docker login docker.io -u $DOCKER_USERNAME
+Password: 
+WARNING! Your password will be stored unencrypted in /home/student/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+
+Login Succeeded
 ```
 
-Replace the image name string in the `operator.yaml` file:
-
+Build the Guestbook operator container image and push image to the docker hub registry. 
 ```bash
-sed -i 's|REPLACE_IMAGE|'${IMG}'|g' deploy/operator.yaml
+make docker-build docker-push IMG=${IMAGE}
+```
+```
+make docker-build docker-push IMG=${IMAGE}
+docker build . -t docker.io/rojanjose/guestbook-operator:v1.0.0
+[+] Building 4.2s (9/9) FINISHED
+ => [internal] load .dockerignore                                                                                                                                               0.0s
+ => => transferring context: 2B                                                                                                                                                 0.0s
+ => [internal] load build definition from Dockerfile                                                                                                                            0.0s
+ => => transferring dockerfile: 237B
+...........
+...........
 
-(MacOS:)
-sed -i "" 's|REPLACE_IMAGE|'${IMG}'|g' deploy/operator.yaml
+753e76240780: Pushed
+4a3bef90e857: Pushed
+d0e9a59c2057: Pushed
+1d8db7e222a6: Pushed
+00af10937683: Pushed
+3aa55ff7bca1: Pushed
+v1.0.0: digest: sha256:c0724c7f31a748094621b7623a81fae107511c23819b729f25878f7e5a7377dd size: 1984
 ```
 
-At this stage, the operator can be deployed with the available manifest files, however, we will explore the operator deloy with OLM features.
-
-### 4. Deploy the Operator with the Operator Lifecycle Manager (OLM)
-
-Ensure OLM is enabled on the cluster by running this command:
-
+You can view the local docker images by running:
 ```bash
-operator-sdk olm status --olm-namespace openshift-operator-lifecycle-manager
+docker images
+```
+```
+$ docker images
+REPOSITORY                                 TAG                 IMAGE ID            CREATED             SIZE
+rojanjose/guestbook-operator               v1.0.0              590c0196c2b6        10 seconds ago      160MB
+quay.io/operator-framework/helm-operator   v1.3.0              57683a970d10        6 weeks ago         160MB
 ```
 
-Expected result:
+### 3. Apply the CRD in the cluster and deploy the operator image.
 
-```bash
-operator-sdk olm status --olm-namespace openshift-operator-lifecycle-manager
-I0813 23:36:41.881438   14844 request.go:621] Throttling request took 1.020925705s, request: GET:https://c100-e.us-east.containers.cloud.ibm.com:31941/apis/rbac.authorization.k8s.io/v1beta1?timeout=32s
-INFO[0002] Fetching CRDs for version "0.13.0"
-INFO[0002] Fetching resources for version "0.13.0"
-INFO[0003] Successfully got OLM status for version "0.13.0"
-
-NAME                                            NAMESPACE    KIND                        STATUS
-installplans.operators.coreos.com                            CustomResourceDefinition    Installed
-clusterserviceversions.operators.coreos.com                  CustomResourceDefinition    Installed
-aggregate-olm-view                                           ClusterRole                 Installed
-operatorgroups.operators.coreos.com                          CustomResourceDefinition    Installed
-catalogsources.operators.coreos.com                          CustomResourceDefinition    Installed
-subscriptions.operators.coreos.com                           CustomResourceDefinition    Installed
-system:controller:operator-lifecycle-manager                 ClusterRole                 Installed
-aggregate-olm-edit                                           ClusterRole                 Installed
-olm-operator-binding-olm                                     ClusterRoleBinding          clusterrolebindings.rbac.authorization.k8s.io "olm-operator-binding-olm" not found
-olm-operator-serviceaccount                     olm          ServiceAccount              serviceaccounts "olm-operator-serviceaccount" not found
-olm-operator                                    olm          Deployment                  deployments.apps "olm-operator" not found
-catalog-operator                                olm          Deployment                  deployments.apps "catalog-operator" not found
-operators                                                    Namespace                   namespaces "operators" not found
-olm                                                          Namespace                   namespaces "olm" not found
-global-operators                                operators    OperatorGroup               operatorgroups.operators.coreos.com "global-operators" not found
-olm-operators                                   olm          OperatorGroup               operatorgroups.operators.coreos.com "olm-operators" not found
-packageserver                                   olm          ClusterServiceVersion       clusterserviceversions.operators.coreos.com "packageserver" not found
-operatorhubio-catalog                           olm          CatalogSource               catalogsources.operators.coreos.com "operatorhubio-catalog" not found
+Install the Guestbook customer resource definition using the `make install` command:
+```
+make install
+```
+```
+make install
+/home/student/guestbook-operator-project/bin/kustomize build config/crd | kubectl apply -f -
+customresourcedefinition.apiextensions.k8s.io/guestbooks.charts.guestbook.ibm.com created
+```
+View the deployed CRD
+```
+oc describe  CustomResourceDefinition guestbooks.charts.guestbook.ibm.com
 ```
 
-[Note: OLM is partially enabled which is sufficient to complete this lab.]
-
-Create a bundle:
-
-```bash
-operator-sdk generate bundle --version 1.0.0
+Next step is to deploy the operator. Note that the operator is installed in its own namespace `guestbook-operator-project-system`.
+```
+make deploy IMG=${IMAGE}
+```
+```
+$ make deploy IMG=${IMAGE}
+cd config/manager && /home/student/guestbook-operator-project/bin/kustomize edit set image controller=docker.io/rojanjose/guestbook-operator:v1.0.0
+/home/student/guestbook-operator-project/bin/kustomize build config/default | kubectl apply -f -
+namespace/guestbook-operator-project-system created
+customresourcedefinition.apiextensions.k8s.io/guestbooks.charts.guestbook.ibm.com unchanged
+role.rbac.authorization.k8s.io/guestbook-operator-project-leader-election-role created
+clusterrole.rbac.authorization.k8s.io/guestbook-operator-project-manager-role created
+clusterrole.rbac.authorization.k8s.io/guestbook-operator-project-metrics-reader created
+clusterrole.rbac.authorization.k8s.io/guestbook-operator-project-proxy-role created
+rolebinding.rbac.authorization.k8s.io/guestbook-operator-project-leader-election-rolebinding created
+clusterrolebinding.rbac.authorization.k8s.io/guestbook-operator-project-manager-rolebinding created
+clusterrolebinding.rbac.authorization.k8s.io/guestbook-operator-project-proxy-rolebinding created
+service/guestbook-operator-project-controller-manager-metrics-service created
+deployment.apps/guestbook-operator-project-controller-manager created
 ```
 
-Output of the command:
-
+View of what got deployed:
 ```bash
-INFO[0000] Generating bundle manifests version 1.0.0
+oc get all -n ${OPERATOR_PROJECT}-system
+```
+```
+$ oc get all -n ${OPERATOR_PROJECT}-system
+NAME                                                                 READY   STATUS    RESTARTS   AGE
+pod/guestbook-operator-project-controller-manager-7bc6f986dd-2r898   2/2     Running   0          2m24s
 
-Display name for the operator (required):
-> Guestbook Operator
+NAME                                                                    TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/guestbook-operator-project-controller-manager-metrics-service   ClusterIP   172.21.110.64   <none>        8443/TCP   2m24s
 
-Description for the operator (required):
-> Demo helm operator for Guestbook
+NAME                                                            READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/guestbook-operator-project-controller-manager   1/1     1            1           2m24s
 
-Provider's name for the operator (required):
-> IBM
-
-Any relevant URL for the provider name (optional):
-> https://github.com/rojanjose/guestbook-helm-operator
-
-Comma-separated list of keywords for your operator (required):
-> helm,operator,kubernetes,openshift
-
-Comma-separated list of maintainers and their emails (e.g. 'name1:email1, name2:email2') (required):
-> Rojan:rojanjose@gmail.com
-INFO[0164] Bundle manifests generated successfully in deploy/olm-catalog/guestbook-operator-project
-INFO[0164] Building annotations.yaml
-INFO[0164] Writing annotations.yaml in /Users/operator/guestbook-operator-project/deploy/olm-catalog/guestbook-operator-project/metadata
-INFO[0164] Building Dockerfile
-INFO[0164] Writing bundle.Dockerfile in /Users/operator/guestbook-operator-project
+NAME                                                                       DESIRED   CURRENT   READY   AGE
+replicaset.apps/guestbook-operator-project-controller-manager-7bc6f986dd   1         1         1       2m24s
 ```
 
-A bundle manifests directory deploy/olm-catalog/guestbook-operator-project/manifests containing a CSV and all CRDs in deploy/crds and a bundle metadata directory deploy/olm-catalog/guestbook-operator-project/metadata are generated.
 
-![OLM files](images/lab4/olm-manifest.png)
+### 4. Deploy the operand by applying the custom resource (CR) into the cluster.
 
-Create Project where operator OLM should be installed:
-
+Create a new project called `guestbook` where Guestbook application will be deployed.
 ```bash
-oc new-project guest-operator-ns
+oc new-project guestbook
 ```
-
-Output:
-
-```bash
-Now using project "guest-operator-ns" on server "https://c100-e.us-east.containers.cloud.ibm.com:31941".
+```
+$ oc new-project guestbook
+Now using project "guestbook" on server "https://c107-e.us-south.containers.cloud.ibm.com:30606".
 
 You can add applications to this project with the 'new-app' command. For example, try:
 
-    oc new-app django-psql-example
-...
+    oc new-app ruby~https://github.com/sclorg/ruby-ex.git
+
+to build a new example application in Ruby. Or use kubectl to deploy a simple Kubernetes application:
+
+    kubectl create deployment hello-node --image=gcr.io/hello-minikube-zero-install/hello-node
 ```
 
-Create an OperatorGroup yaml definition:
+An example custom resource yaml file was automatically generated under the `config/samples` directory as part of the `create API` step earlier. This is based on the default `values.yaml` from the Guestbook helm chart under `helm-charts/guestbook/values.yaml`. Let's use this file to create the operand.
+```bash
+oc apply -f config/samples/charts_v1alpha1_guestbook.yaml
+```
+```
+$ oc apply -f config/samples/charts_v1alpha1_guestbook.yaml
+guestbook.charts.guestbook.ibm.com/guestbook-sample created
+```
+Outcome of the operand deploy can be viewed by running the command:
+```bash
+oc get all -n guestbook
+```
+```
+$ oc get all -n guestbook
+NAME                                    READY   STATUS    RESTARTS   AGE
+pod/guestbook-sample-8594c8dc46-bl7sm   1/1     Running   0          75s
+pod/guestbook-sample-8594c8dc46-qwgkv   1/1     Running   0          75s
+pod/redis-master-68857cd57c-bjxt5       1/1     Running   0          75s
+pod/redis-slave-bbd8d8545-57944         1/1     Running   0          75s
+pod/redis-slave-bbd8d8545-rxqc5         1/1     Running   0          75s
+
+NAME                       TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)          AGE
+service/guestbook-sample   LoadBalancer   172.21.41.67     169.45.217.90   3000:30940/TCP   75s
+service/redis-master       ClusterIP      172.21.206.242   <none>          6379/TCP         75s
+service/redis-slave        ClusterIP      172.21.133.74    <none>          6379/TCP         75s
+
+NAME                               READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/guestbook-sample   2/2     2            2           75s
+deployment.apps/redis-master       1/1     1            1           75s
+deployment.apps/redis-slave        2/2     2            2           75s
+
+NAME                                          DESIRED   CURRENT   READY   AGE
+replicaset.apps/guestbook-sample-8594c8dc46   2         2         2       75s
+replicaset.apps/redis-master-68857cd57c       1         1         1       75s
+replicaset.apps/redis-slave-bbd8d8545         2         2         2       75s
+```
+
+Validate the Guestbook application is running by accessing it with the following commands:
+```bash
+HOSTNAME=`oc get nodes -ojsonpath='{.items[0].metadata.labels.ibm-cloud\.kubernetes\.io\/external-ip}'`
+SERVICEPORT=`oc get svc guestbook-sample -o=jsonpath='{.spec.ports[0].nodePort}'`
+echo "http://$HOSTNAME:$SERVICEPORT"
+```
+```
+http://169.45.242.104:30940
+```
+
+Copy and paste the above URL in a new browser tab to get to the Guestbook landing page as shown below:
+![Guestbook UI](./images/lab3/guestbook-ui.png)
+
+
+Open the OpenShift console to view the artificats created as part of this exerice.
+
+Guestbook operator pod:
+![Operator pd](images/lab3/operator-pod.png)
+
+Guestbook application pods:
+![Operator pd](images/lab3/application-pod.png)
+
+### 5. Cleanup the deployment.
+
+Remove the Guestbook application by deleting the customer resource (CR).
 
 ```bash
-cat <<EOF >>deploy/operator_group.yaml
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: guestbook-og
-  namespace: guest-operator-ns
-spec:
-  targetNamespaces:
-  - guest-operator-ns
-EOF
+oc delete -f config/samples/charts_v1alpha1_guestbook.yaml 
+```
+```
+$ oc delete -f config/samples/charts_v1alpha1_guestbook.yaml 
+guestbook.charts.guestbook.ibm.com "guestbook-sample" deleted
+
+$ oc get all -n guestbook
+No resources found in guestbook namespace.
+
+$ oc delete project guestbook
+project.project.openshift.io "guestbook" deleted
 ```
 
-Replace `placeholder` string with project `guest-operator-ns` in
-`guestbook-operator.clusterserviceversion.yaml`
-
-```bash
-sed -i 's#namespace: placeholder#namespace: guest-operator-ns#' deploy/olm-catalog/guestbook-operator-project/manifests/guestbook-operator-project.clusterserviceversion.yaml
+Finally, to delete the CRDs, run the `make undeploy` command:
+```
+make undeploy
+```
+```
+$ make undeploy
+/home/student/guestbook-operator-project/bin/kustomize build config/default | kubectl delete -f -
+namespace "gb-helm-operator-system" deleted
+customresourcedefinition.apiextensions.k8s.io "guestbooks.charts.guestbook.ibm.com" deleted
+role.rbac.authorization.k8s.io "gb-helm-operator-leader-election-role" deleted
+clusterrole.rbac.authorization.k8s.io "gb-helm-operator-manager-role" deleted
+clusterrole.rbac.authorization.k8s.io "gb-helm-operator-metrics-reader" deleted
+clusterrole.rbac.authorization.k8s.io "gb-helm-operator-proxy-role" deleted
+rolebinding.rbac.authorization.k8s.io "gb-helm-operator-leader-election-rolebinding" deleted
+clusterrolebinding.rbac.authorization.k8s.io "gb-helm-operator-manager-rolebinding" deleted
+clusterrolebinding.rbac.authorization.k8s.io "gb-helm-operator-proxy-rolebinding" deleted
+service "gb-helm-operator-controller-manager-metrics-service" deleted
+deployment.apps "gb-helm-operator-controller-manager" deleted
 ```
 
-or on Mac,
-
-```bash
-sed -i "" 's#namespace: placeholder#namespace: guest-operator-ns#' deploy/olm-catalog/guestbook-operator-project/manifests/guestbook-operator-project.clusterserviceversion.yaml
-```
-
-### 5. Install the operator
-
-Create the Operator group:
-
-```bash
-oc create -f deploy/operator_group.yaml
-```
-
-Apply the Operator’s CSV manifest to the specified namespace in the cluster:
-
-```bash
-oc create -f deploy/olm-catalog/guestbook-operator-project/manifests/guestbook-operator-project.clusterserviceversion.yaml
-```
-
-Create the role, role binding, and service account to grant resource permissions to the Operator to create the Guestbook type that the Operator manages:
-
-```bash
-oc create -f deploy/service_account.yaml
-oc create -f deploy/role.yaml
-oc create -f deploy/role_binding.yaml
-```
-
-Wait for few minutes for the Guestbook operator to complete the installation.
-
-```bash
-oc get ClusterServiceVersion
-```
-
-ClusterServiceVersion should show a PHASE value of `Succeeded`,
-
-```bash
-$ oc get ClusterServiceVersion
-NAME                                DISPLAY              VERSION   REPLACES   PHASE
-guestbook-operator-project.v1.0.0   Guestbook Operator   1.0.0                Succeeded
-```
-
-Check the list of `Installed Operators` under the project `guest-operator-ns`.
-
-![Guestbook operator](images/lab4/guestbook-operator.png)
-
-Open the operator and validate that install succeeded.
-
-![Guestbook opertor](images/lab4/guestbook-operator-details.png)
-
-Now, create an instance of Guestbook helm chart. Click on `Create instance` icon.
-
-![Guestbook Create Instance](images/lab4/guestbook-create-instance.png)
-
-Goto `Workloads > Pods` to view the pods. You should see 2 frontend pods, 1 Redis master, 2 Redis slave and pod supporting the Guestbook operator OLM.
-
-![Guestbook pods](images/lab4/guestbook-pods.png)
-
-### 6. Update the Guestbook application instance
-
-Open the `deploy/crds/helm.operator-sdk_v1alpha1_guestbook_cr.yaml` and change the value of `replicaCount` to 4.
-
-![Udpate replica count](images/lab4/guestbook-replica-count.png)
-
-Save the file and run the `oc apply` command:
-
-```bash
-oc apply -f deploy/crds/helm.operator-sdk_v1alpha1_guestbook_cr.yaml
-```
-
-Run `oc get pods` to validate the guesbook pod count:
-
-```bash
-oc get podsNAME                                          READY   STATUS    RESTARTS   AGE
-example-guestbook-6fdb6776b-hdq64             1/1     Running   0          41m
-example-guestbook-6fdb6776b-pktr8             1/1     Running   0          8s
-example-guestbook-6fdb6776b-x2nqw             1/1     Running   0          41m
-example-guestbook-6fdb6776b-xz8lp             1/1     Running   0          77s
-guestbook-operator-project-767cc5686c-ksmxq   1/1     Running   0          52m
-redis-master-68857cd57c-pwctp                 1/1     Running   0          41m
-redis-slave-bbd8d8545-6jk8m                   1/1     Running   0          41m
-redis-slave-bbd8d8545-k65wz                   1/1     Running   0          41m
-```
-
-### 7. Clean up
-
-Run the `oc delete` commands to remove the operator.
-
-```bash
-oc delete -f deploy/crds/helm.operator-sdk_v1alpha1_guestbook_cr.yaml
-
-oc delete -f deploy/service_account.yaml
-oc delete -f deploy/role.yaml
-oc delete -f deploy/role_binding.yaml
-
-oc delete -f deploy/olm-catalog/guestbook-operator-project/manifests/guestbook-operator-project.clusterserviceversion.yaml
-oc delete -f deploy/operator_group.yaml
-
-oc delete -f deploy/crds/helm.operator-sdk_guestbooks_crd.yaml
-```
+This concludes the Helm Operator lab. Go [here](https://v1-3-x.sdk.operatorframework.io/docs/building-operators/helm/quickstart/) for additional information on building operators using Helm.

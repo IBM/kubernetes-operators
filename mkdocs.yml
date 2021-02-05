@@ -17,7 +17,10 @@ nav:
     - Custom Resource (CR): lab1.md
     - Go Operator with Operator SDK: lab2.md
     - Operator from Helm: lab3.md
-    - Tools: lab4.md
+    - OLM:
+      - Introduction : lab4.md
+      - Operator with OLM : lab5.md
+    - Tools: lab6.md
 
 ## DO NOT CHANGE BELOW THIS LINE
 
