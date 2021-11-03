@@ -1,5 +1,16 @@
 #!/bin/sh
 
+
+#Install Go
+wget "https://golang.org/dl/go1.17.2.linux-amd64.tar.gz" &&
+mkdir -p ${HOME}/bin &&
+tar -C ${HOME}/bin -xzf go1.17.2.linux-amd64.tar.gz
+
+export PATH=$PATH:${HOME}/bin/go/bin:${HOME}/bin
+
+go --version
+
+
 # First parameter should be the Operator version string, setting default value
 RELEASE_VERSION="${1:-v1.3.0}"
 
@@ -28,6 +39,11 @@ echo -e "-----------------------------\nHelm version:"
 helm version
 echo -e "-----------------------------\nOperator-sdk version:"
 ${HOME}/bin/operator-sdk version
+
+operator-sdk version
+
+
+export PATH=$PATH:${HOME}/bin/go/bin:${HOME}/bin
 
 #echo -e "-----------------------------\nAnsible operator version:"
 #ansible-operator version
